@@ -1,9 +1,11 @@
 double ? = Double;
 string ? = String;
 
+int ? = Int;
 int32 = Int32;
 int53 = Int53;
 int64 = Int64;
+long ? = Long;
 bytes = Bytes;
 secureString = SecureString;
 secureBytes = SecureBytes;
@@ -15,6 +17,8 @@ boolFalse = Bool;
 boolTrue = Bool;
 
 vector {t:Type} # [ t ] = Vector t;
+
+int256 8*[ int ] = Int256;
 
 error code:int32 message:string = Error;
 ok = Ok;
@@ -50,9 +54,11 @@ internal.transactionId lt:int64 hash:bytes = internal.TransactionId;
 ton.blockId workchain:int32 shard:int64 seqno:int32 = internal.BlockId;
 ton.blockIdExt workchain:int32 shard:int64 seqno:int32 root_hash:bytes file_hash:bytes = ton.BlockIdExt;
 
+raw.blockInfo workchain:int shard:long seqno:int root_hash:int256 file_hash:int256 = raw.BlockInfo;
+
 raw.fullAccountState balance:int64 code:bytes data:bytes last_transaction_id:internal.transactionId block_id:ton.blockIdExt frozen_hash:bytes sync_utime:int53 = raw.FullAccountState;
-raw.message source:accountAddress destination:accountAddress value:int64 fwd_fee:int64 ihr_fee:int64 created_lt:int64 body_hash:bytes msg_data:msg.Data = raw.Message;
-raw.transaction utime:int53 data:bytes transaction_id:internal.transactionId fee:int64 storage_fee:int64 other_fee:int64 in_msg:raw.message out_msgs:vector<raw.message> = raw.Transaction;
+raw.message source:accountAddress destination:accountAddress value:int64 fwd_fee:int64 ihr_fee:int64 created_lt:int64 body_hash:bytes hash:bytes msg_data:msg.Data = raw.Message;
+raw.transaction utime:int53 block:raw.blockInfo data:bytes transaction_id:internal.transactionId fee:int64 storage_fee:int64 other_fee:int64 in_msg:raw.message out_msgs:vector<raw.message> = raw.Transaction;
 raw.transactions transactions:vector<raw.transaction> previous_transaction_id:internal.transactionId = raw.Transactions;
 
 raw.initialAccountState code:bytes data:bytes = InitialAccountState;
@@ -204,6 +210,7 @@ packAccountAddress account_address:unpackedAccountAddress = AccountAddress;
 getBip39Hints prefix:string = Bip39Hints;
 
 //raw.init initial_account_state:raw.initialAccountState = Ok;
+raw.getMasterchainInfo = raw.BlockInfo;
 raw.getAccountState account_address:accountAddress = raw.FullAccountState;
 raw.getTransactions private_key:InputKey account_address:accountAddress from_transaction_id:internal.transactionId = raw.Transactions;
 raw.sendMessage body:bytes  = Ok;

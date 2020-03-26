@@ -286,6 +286,21 @@ target_include_directories(fift-lib PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOU
 target_link_libraries(fift-lib PUBLIC ton_crypto ton_db tdutils ton_block)
 set_target_properties(fift-lib PROPERTIES OUTPUT_NAME fift)
 
+include(GenerateExportHeader)
+
+set(FIFTLIB_HEADERS fift/fiftlib.h)
+set(FIFTLIB_SOURCE fift/fiftlib.cpp)
+
+add_library(fiftlib SHARED ${FIFTLIB_SOURCE} ${FIFTLIB_HEADERS})
+target_link_libraries(fiftlib PUBLIC fift-lib)
+generate_export_header(fiftlib EXPORT_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/fiftlib_export.h)
+target_include_directories(fiftlib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+if (APPLE)
+  set_target_properties(fiftlib PROPERTIES LINK_FLAGS "-Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/fiftlib_export_list")
+endif()
+
 add_executable(fift fift/fift-main.cpp)
 target_link_libraries(fift PUBLIC fift-lib)
 if (WINGETOPT_FOUND)

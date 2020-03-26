@@ -1,4 +1,4 @@
-/* 
+/*
     This file is part of TON Blockchain source code.
 
     TON Blockchain is free software; you can redistribute it and/or
@@ -14,13 +14,13 @@
     You should have received a copy of the GNU General Public License
     along with TON Blockchain.  If not, see <http://www.gnu.org/licenses/>.
 
-    In addition, as a special exception, the copyright holders give permission 
-    to link the code of portions of this program with the OpenSSL library. 
-    You must obey the GNU General Public License in all respects for all 
-    of the code used other than OpenSSL. If you modify file(s) with this 
-    exception, you may extend this exception to your version of the file(s), 
-    but you are not obligated to do so. If you do not wish to do so, delete this 
-    exception statement from your version. If you delete this exception statement 
+    In addition, as a special exception, the copyright holders give permission
+    to link the code of portions of this program with the OpenSSL library.
+    You must obey the GNU General Public License in all respects for all
+    of the code used other than OpenSSL. If you modify file(s) with this
+    exception, you may extend this exception to your version of the file(s),
+    but you are not obligated to do so. If you do not wish to do so, delete this
+    exception statement from your version. If you delete this exception statement
     from all source files in the program, then also delete it here.
 
     Copyright 2017-2019 Telegram Systems LLP
@@ -74,9 +74,10 @@ int main() {
       {"\"tl/tl_jni_object.h\"", "\"tl/tl_object_store.h\"", "\"td/utils/int_types.h\""},
       {"<string>", "\"td/utils/SharedSlice.h\""});
 #else
+// COPPER CODE: some more to support patch
   generate_cpp<>("auto/tl", "tonlib_api", "std::string", "std::string", "td::SecureString", "td::SecureString",
-                 {"\"tl/tl_object_parse.h\"", "\"tl/tl_object_store.h\"", "\"td/utils/int_types.h\""},
-                 {"<string>", "\"td/utils/SharedSlice.h\""});
+                 {"\"tl/tl_object_parse.h\"", "\"tl/tl_object_store.h\"", "\"td/utils/int_types.h\"", "\"crypto/common/bitstring.h\""},
+                 {"<string>", "\"td/utils/SharedSlice.h\"", "\"crypto/common/bitstring.h\""});
 #endif
   td::gen_json_converter(td::tl::read_tl_config_from_file("scheme/tonlib_api.tlo"), "auto/tl/tonlib_api_json",
                          "tonlib_api");

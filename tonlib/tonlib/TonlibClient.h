@@ -226,6 +226,9 @@ class TonlibClient : public td::actor::Actor {
   td::Status do_request(const tonlib_api::raw_createQuery& request,
                         td::Promise<object_ptr<tonlib_api::query_info>>&& promise);
 
+// COPPER CODE: Custom get masterchain info
+  td::Status do_request(const tonlib_api::raw_getMasterchainInfo& request,
+                        td::Promise<object_ptr<tonlib_api::raw_blockInfo>>&& promise);
   td::Status do_request(tonlib_api::raw_getAccountState& request,
                         td::Promise<object_ptr<tonlib_api::raw_fullAccountState>>&& promise);
   td::Status do_request(tonlib_api::raw_getTransactions& request,

@@ -1139,6 +1139,29 @@ class GetRawAccountState : public td::actor::Actor {
   }
 };
 
+// COPPER CODE: get master chain info in json lib
+class GetMasterChain : public td::actor::Actor {
+ public:
+  GetMasterChain(ExtClientRef ext_client_ref, td::Promise<LastBlockState>&& promise)
+      : promise_(std::move(promise)) {
+    client_.set_client(ext_client_ref);
+  }
+
+ private:
+  td::Promise<LastBlockState> promise_;
+  ExtClient client_;
+  LastBlockState last_block_;
+
+  void with_block_state(td::Result<LastBlockState> block_state) {
+    promise_.set_result(TRY_VM(std::move(block_state)));
+    stop();
+  }
+
+  void start_up() override {
+    client_.with_last_block([self = this](auto r_state) { self->with_block_state(std::move(r_state)); });
+  }
+};
+
 TonlibClient::TonlibClient(td::unique_ptr<TonlibCallback> callback) : callback_(std::move(callback)) {
 }
 TonlibClient::~TonlibClient() = default;
@@ -1685,7 +1708,7 @@ const MasterConfig& get_default_master_config() {
       "root_hash": "VCSXxDHhTALFxReyTZRd8E4Ya3ySOmpOWAS4rBX9XBY=",
       "file_hash": "eh9yveSz1qMdJ7mOsO+I+H77jkLr9NpAuEkoJuseXBo="
     },
-    "init_block": 
+    "init_block":
 {"workchain":-1,"shard":-9223372036854775808,"seqno":870721,"root_hash":"jYKhSQ1xeSPprzgjqiUOnAWwc2yqs7nCVAU21k922s4=","file_hash":"kHidF02CZpaz2ia9jtXUJLp0AiWMWwfzprTUIsddHSo="}
   }
 })abc");
@@ -1803,6 +1826,17 @@ td::Status TonlibClient::do_request(tonlib_api::options_setConfig& request,
   return td::Status::OK();
 }
 
+// COPPER CODE: parse data for new methods
+td::Result<tonlib_api::object_ptr<tonlib_api::raw_blockInfo>> to_raw_masterchainInfo(LastBlockState&& raw_state) {
+   return tonlib_api::make_object<tonlib_api::raw_blockInfo>(
+      raw_state.last_block_id.id.workchain, raw_state.last_block_id.id.shard, raw_state.last_block_id.id.seqno, raw_state.last_block_id.root_hash, raw_state.last_block_id.file_hash);
+}
+
+td::Result<tonlib_api::object_ptr<tonlib_api::raw_blockInfo>> to_raw_blockInfo(ton::BlockIdExt&& block) {
+   return tonlib_api::make_object<tonlib_api::raw_blockInfo>(
+      block.id.workchain, block.id.shard, block.id.seqno, block.root_hash, block.file_hash);
+}
+
 td::Result<std::string> to_std_address_or_throw(td::Ref<vm::CellSlice> cs) {
   auto tag = block::gen::MsgAddressInt().get_tag(*cs);
   if (tag < 0) {
@@ -1899,7 +1933,8 @@ struct ToRawTransactions {
         return tonlib_api::make_object<tonlib_api::raw_message>(
             tonlib_api::make_object<tonlib_api::accountAddress>(src),
             tonlib_api::make_object<tonlib_api::accountAddress>(std::move(dest)), balance, fwd_fee, ihr_fee, created_lt,
-            std::move(body_hash), get_data(src));
+            // COPPER CODE: add message hash to respone
+            std::move(body_hash), cell->get_hash().as_slice().str(), get_data(src));
       }
       case block::gen::CommonMsgInfo::ext_in_msg_info: {
         block::gen::CommonMsgInfo::Record_ext_in_msg_info msg_info;
@@ -1910,7 +1945,8 @@ struct ToRawTransactions {
         return tonlib_api::make_object<tonlib_api::raw_message>(
             tonlib_api::make_object<tonlib_api::accountAddress>(),
             tonlib_api::make_object<tonlib_api::accountAddress>(std::move(dest)), 0, 0, 0, 0, std::move(body_hash),
-            get_data(""));
+            // COPPER CODE: add message hash to respone
+            cell->get_hash().as_slice().str(), get_data(""));
       }
       case block::gen::CommonMsgInfo::ext_out_msg_info: {
         block::gen::CommonMsgInfo::Record_ext_out_msg_info msg_info;
@@ -1920,7 +1956,8 @@ struct ToRawTransactions {
         TRY_RESULT(src, to_std_address(msg_info.src));
         return tonlib_api::make_object<tonlib_api::raw_message>(
             tonlib_api::make_object<tonlib_api::accountAddress>(src),
-            tonlib_api::make_object<tonlib_api::accountAddress>(), 0, 0, 0, 0, std::move(body_hash), get_data(src));
+            // COPPER CODE: add message hash to respone
+            tonlib_api::make_object<tonlib_api::accountAddress>(), 0, 0, 0, 0, std::move(body_hash), cell->get_hash().as_slice().str(), get_data(src));
       }
     }
 
@@ -1936,6 +1973,8 @@ struct ToRawTransactions {
     std::string data;
 
     tonlib_api::object_ptr<tonlib_api::raw_message> in_msg;
+    // COPPER CODE: add block info to transaction
+    tonlib_api::object_ptr<tonlib_api::raw_blockInfo> tx_block;
     std::vector<tonlib_api::object_ptr<tonlib_api::raw_message>> out_msgs;
     td::int64 fees = 0;
     td::int64 storage_fee = 0;
@@ -1947,6 +1986,8 @@ struct ToRawTransactions {
       }
 
       TRY_RESULT_ASSIGN(fees, to_balance(trans.total_fees));
+      // COPPER CODE: add block info to transaction
+      TRY_RESULT_ASSIGN(tx_block, to_raw_blockInfo(std::move(info.blkid)))
       //LOG(ERROR) << fees;
 
       //std::ostringstream outp;
@@ -1979,7 +2020,8 @@ struct ToRawTransactions {
       storage_fee = storage_fees->to_long();
     }
     return tonlib_api::make_object<tonlib_api::raw_transaction>(
-        info.now, data,
+        // COPPER CODE: add block info to transaction
+        info.now, std::move(tx_block), data,
         tonlib_api::make_object<tonlib_api::internal_transactionId>(info.prev_trans_lt,
                                                                     info.prev_trans_hash.as_slice().str()),
         fees, storage_fee, fees - storage_fee, std::move(in_msg), std::move(out_msgs));
@@ -2039,6 +2081,21 @@ td::Status TonlibClient::do_request(const tonlib_api::raw_createAndSendMessage& 
   auto message = ton::GenericAccount::create_ext_message(account_address, std::move(init_state), std::move(data));
 
   make_request(int_api::SendMessage{std::move(message)}, to_any_promise(std::move(promise)));
+  return td::Status::OK();
+}
+
+// COPPER CODE: Custom get masterchain info
+td::Status TonlibClient::do_request(const tonlib_api::raw_getMasterchainInfo& request,
+                                    td::Promise<object_ptr<tonlib_api::raw_blockInfo>>&& promise) {
+  td::actor::create_actor<GetMasterChain>(
+      "GetMasterChain", client_.get_client(),
+      [promise = std::move(promise)](td::Result<LastBlockState> r_state) mutable {
+        if (r_state.is_error()) {
+          return promise.set_error(r_state.move_as_error());
+        }
+        promise.set_result(to_raw_masterchainInfo(r_state.move_as_ok()));
+      })
+      .release();
   return td::Status::OK();
 }
 
