@@ -98,12 +98,13 @@ void ArchiveManager::add_file(BlockHandle handle, FileReference ref_id, td::Buff
     auto ig = mp.init_guard();
     ig.add_promise(std::move(promise));
     auto f1 = get_file_desc(handle->id().shard_full(), get_temp_package_id(), 0, 0, 0, true);
-    td::actor::send_closure(f1->file_actor_id(), &ArchiveSlice::add_file, std::move(ref_id), data.clone(),
+    td::actor::send_closure(f1->file_actor_id(), &ArchiveSlice::add_file, nullptr, std::move(ref_id), data.clone(),
                             ig.get_promise());
     if (copy_to_key) {
       auto f2 = get_file_desc(handle->id().shard_full(), get_key_package_id(handle->masterchain_ref_block()),
                               handle->id().seqno(), handle->unix_time(), handle->logical_time(), true);
-      td::actor::send_closure(f2->file_actor_id(), &ArchiveSlice::add_file, ref_id, std::move(data), ig.get_promise());
+      td::actor::send_closure(f2->file_actor_id(), &ArchiveSlice::add_file, nullptr, ref_id, std::move(data),
+                              ig.get_promise());
     }
     return;
   }
@@ -115,24 +116,25 @@ void ArchiveManager::add_file(BlockHandle handle, FileReference ref_id, td::Buff
   ig.add_promise(std::move(promise));
   auto f1 = get_file_desc(handle->id().shard_full(), get_package_id(handle->masterchain_ref_block()),
                           handle->id().seqno(), handle->unix_time(), handle->logical_time(), true);
-  td::actor::send_closure(f1->file_actor_id(), &ArchiveSlice::add_file, ref_id, data.clone(), ig.get_promise());
+  td::actor::send_closure(f1->file_actor_id(), &ArchiveSlice::add_file, handle, ref_id, data.clone(), ig.get_promise());
   if (copy_to_key) {
     auto f2 = get_file_desc(handle->id().shard_full(), get_key_package_id(handle->masterchain_ref_block()),
                             handle->id().seqno(), handle->unix_time(), handle->logical_time(), true);
-    td::actor::send_closure(f2->file_actor_id(), &ArchiveSlice::add_file, ref_id, std::move(data), ig.get_promise());
+    td::actor::send_closure(f2->file_actor_id(), &ArchiveSlice::add_file, handle, ref_id, std::move(data),
+                            ig.get_promise());
   }
 }
 
 void ArchiveManager::add_key_block_proof(UnixTime ts, BlockSeqno seqno, LogicalTime lt, FileReference ref_id,
                                          td::BufferSlice data, td::Promise<td::Unit> promise) {
   auto f = get_file_desc(ShardIdFull{masterchainId}, get_key_package_id(seqno), seqno, ts, lt, true);
-  td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::add_file, std::move(ref_id), std::move(data),
+  td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::add_file, nullptr, std::move(ref_id), std::move(data),
                           std::move(promise));
 }
 
 void ArchiveManager::add_temp_file_short(FileReference ref_id, td::BufferSlice data, td::Promise<td::Unit> promise) {
   auto f = get_file_desc(ref_id.shard(), get_temp_package_id(), 0, 0, 0, true);
-  td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::add_file, std::move(ref_id), std::move(data),
+  td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::add_file, nullptr, std::move(ref_id), std::move(data),
                           std::move(promise));
 }
 
@@ -214,7 +216,7 @@ void ArchiveManager::get_file_short(FileReference ref_id, td::Promise<td::Buffer
           td::actor::send_closure(SelfId, &ArchiveManager::get_temp_file_short, std::move(ref_id), std::move(promise));
         }
       });
-      td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::get_file, ref_id, std::move(P));
+      td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::get_file, nullptr, ref_id, std::move(P));
       return;
     }
   }
@@ -237,7 +239,7 @@ void ArchiveManager::get_key_block_proof(FileReference ref_id, td::Promise<td::B
   if (search_in_key) {
     auto f = get_file_desc_by_seqno(block_id.shard_full(), block_id.seqno(), true);
     if (f) {
-      td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::get_file, ref_id, std::move(promise));
+      td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::get_file, nullptr, ref_id, std::move(promise));
     } else {
       promise.set_error(td::Status::Error(ErrorCode::notready, "key proof not in db"));
     }
@@ -265,14 +267,15 @@ void ArchiveManager::get_file_short_cont(FileReference ref_id, PackageId idx, td
       td::actor::send_closure(SelfId, &ArchiveManager::get_file_short_cont, std::move(ref_id), idx, std::move(promise));
     }
   });
-  td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::get_file, std::move(ref_id), std::move(P));
+  td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::get_file, nullptr, std::move(ref_id), std::move(P));
 }
 
 void ArchiveManager::get_file(ConstBlockHandle handle, FileReference ref_id, td::Promise<td::BufferSlice> promise) {
   if (handle->moved_to_archive()) {
     auto f = get_file_desc(handle->id().shard_full(), get_package_id(handle->masterchain_ref_block()), 0, 0, 0, false);
     if (f) {
-      td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::get_file, std::move(ref_id), std::move(promise));
+      td::actor::send_closure(f->file_actor_id(), &ArchiveSlice::get_file, std::move(handle), std::move(ref_id),
+                              std::move(promise));
       return;
     }
   }
@@ -537,7 +540,7 @@ void ArchiveManager::load_package(PackageId id) {
     }
   }
 
-  desc.file = td::actor::create_actor<ArchiveSlice>("slice", id.key, id.temp, prefix);
+  desc.file = td::actor::create_actor<ArchiveSlice>("slice", id.id, id.key, id.temp, db_root_);
 
   get_file_map(id).emplace(id, std::move(desc));
 }
@@ -571,7 +574,7 @@ ArchiveManager::FileDescription *ArchiveManager::add_file_desc(ShardIdFull shard
   FileDescription desc{id, false};
   td::mkdir(db_root_ + id.path()).ensure();
   std::string prefix = PSTRING() << db_root_ << id.path() << id.name();
-  desc.file = td::actor::create_actor<ArchiveSlice>("slice", id.key, id.temp, prefix);
+  desc.file = td::actor::create_actor<ArchiveSlice>("slice", id.id, id.key, id.temp, db_root_);
   if (!id.temp) {
     update_desc(desc, shard, seqno, ts, lt);
   }
@@ -992,23 +995,19 @@ void ArchiveManager::get_archive_id(BlockSeqno masterchain_seqno, td::Promise<td
     return;
   }
 
-  promise.set_result(F->id.id);
+  td::actor::send_closure(F->file_actor_id(), &ArchiveSlice::get_archive_id, masterchain_seqno, std::move(promise));
 }
 
 void ArchiveManager::get_archive_slice(td::uint64 archive_id, td::uint64 offset, td::uint32 limit,
                                        td::Promise<td::BufferSlice> promise) {
-  if (archive_id != static_cast<td::uint32>(archive_id)) {
-    promise.set_error(td::Status::Error(ErrorCode::notready, "archive not found"));
-    return;
-  }
-  auto F = get_file_desc(ShardIdFull{masterchainId}, PackageId{static_cast<BlockSeqno>(archive_id), false, false}, 0, 0,
-                         0, false);
+  auto arch = static_cast<BlockSeqno>(archive_id);
+  auto F = get_file_desc(ShardIdFull{masterchainId}, PackageId{arch, false, false}, 0, 0, 0, false);
   if (!F) {
     promise.set_error(td::Status::Error(ErrorCode::notready, "archive not found"));
     return;
   }
 
-  td::actor::send_closure(F->file_actor_id(), &ArchiveSlice::get_slice, offset, limit, std::move(promise));
+  td::actor::send_closure(F->file_actor_id(), &ArchiveSlice::get_slice, archive_id, offset, limit, std::move(promise));
 }
 
 void ArchiveManager::commit_transaction() {
