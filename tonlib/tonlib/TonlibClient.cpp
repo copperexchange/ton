@@ -45,6 +45,7 @@
 #include "ton/ton-shard.h"
 
 #include "vm/boc.h"
+#include "vm/cells/MerkleProof.h"
 
 #include "td/utils/as.h"
 #include "td/utils/Random.h"
@@ -3443,6 +3444,38 @@ td::Status TonlibClient::do_request(const tonlib_api::liteServer_getInfo& reques
   client_.send_query(ton::lite_api::liteServer_getVersion(), promise.wrap([](auto&& version) {
     return tonlib_api::make_object<tonlib_api::liteServer_info>(version->now_, version->version_,
                                                                 version->capabilities_);
+  }));
+  return td::Status::OK();
+}
+
+td::Status TonlibClient::do_request(const tonlib_api::raw_getBlockMasterChainReference& request,
+                                    td::Promise<object_ptr<tonlib_api::raw_blockInfo>>&& promise) {
+  ton::BlockIdExt block_id;
+  block_id.id.workchain = request.id_->workchain_;
+  block_id.id.shard = request.id_->shard_;
+  block_id.id.seqno = request.id_->seqno_;
+  block_id.root_hash = request.id_->root_hash_;
+  block_id.file_hash = request.id_->file_hash_;
+  client_.send_query(ton::lite_api::liteServer_getBlockHeader(ton::create_tl_lite_block_id(block_id), 0), promise.wrap([=](auto&& block) {
+    auto decoded = vm::std_boc_deserialize(block->header_proof_.clone());
+    if (decoded.is_error()) {
+      return tonlib_api::make_object<tonlib_api::raw_blockInfo>();
+    }
+    auto root = decoded.move_as_ok();
+    vm::CellSlice cs{vm::NoVm(), root};
+    auto virt_root = vm::MerkleProof::virtualize(root, 1);
+    if (virt_root.is_null()) {
+      return tonlib_api::make_object<tonlib_api::raw_blockInfo>();
+    }
+    std::vector<ton::BlockIdExt> prev;
+    ton::BlockIdExt mc_blkid;
+    bool after_split;
+    auto res = block::unpack_block_prev_blk_ext(virt_root, block_id, prev, mc_blkid, after_split);
+    if (res.is_error()) {
+      return tonlib_api::make_object<tonlib_api::raw_blockInfo>();
+    }
+    return tonlib_api::make_object<tonlib_api::raw_blockInfo>(
+      mc_blkid.id.workchain, mc_blkid.id.shard, mc_blkid.id.seqno, mc_blkid.root_hash, mc_blkid.file_hash);
   }));
   return td::Status::OK();
 }

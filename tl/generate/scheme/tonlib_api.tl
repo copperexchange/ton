@@ -211,6 +211,7 @@ getBip39Hints prefix:string = Bip39Hints;
 
 //raw.init initial_account_state:raw.initialAccountState = Ok;
 raw.getMasterchainInfo = raw.BlockInfo;
+raw.getBlockMasterChainReference id:raw.blockInfo = raw.BlockInfo;
 raw.getAccountState account_address:accountAddress = raw.FullAccountState;
 raw.getTransactions private_key:InputKey account_address:accountAddress from_transaction_id:internal.transactionId = raw.Transactions;
 raw.sendMessage body:bytes  = Ok;

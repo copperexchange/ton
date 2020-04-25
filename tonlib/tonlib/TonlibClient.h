@@ -329,6 +329,9 @@ class TonlibClient : public td::actor::Actor {
   td::Status do_request(const tonlib_api::liteServer_getInfo& request,
                         td::Promise<object_ptr<tonlib_api::liteServer_info>>&& promise);
 
+  td::Status do_request(const tonlib_api::raw_getBlockMasterChainReference& request,
+                        td::Promise<object_ptr<tonlib_api::raw_blockInfo>>&& promise);
+
   td::Status do_request(tonlib_api::withBlock& request, td::Promise<object_ptr<tonlib_api::Object>>&& promise);
 
   void proxy_request(td::int64 query_id, std::string data);
